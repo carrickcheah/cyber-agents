@@ -1,7 +1,7 @@
 # Control catalog
 
-The reference catalog behind `aisafety/register` (TS) and
-`aisafety.register` (Python) — **44 controls** extracted from a production
+The reference catalog behind `llmsafety/register` (TS) and
+`llmsafety.register` (Python) — **44 controls** extracted from a production
 multi-tenant AI contact centre and scrubbed of deployment specifics. The code
 module is the source of truth; this document is generated from the same data.
 

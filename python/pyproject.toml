@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "aisafety"
+name = "llmsafety"
 version = "0.1.0"
 description = "AI-security auditor — score any AI endpoint against Responsible-AI metrics, plus a 44-control safety register (early/experimental)"
 readme = "README.md"
@@ -22,8 +22,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/carrickcheah/aisafety"
-Repository = "https://github.com/carrickcheah/aisafety"
+Homepage = "https://github.com/carrickcheah/llmsafety"
+Repository = "https://github.com/carrickcheah/llmsafety"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/aisafety"]
+packages = ["src/llmsafety"]

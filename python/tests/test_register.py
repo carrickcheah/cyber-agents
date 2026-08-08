@@ -1,10 +1,10 @@
-"""Invariants of the reference control catalog (`aisafety.register`)."""
+"""Invariants of the reference control catalog (`llmsafety.register`)."""
 from __future__ import annotations
 
 import re
 import unittest
 
-from aisafety.register import (
+from llmsafety.register import (
     CAPTURE_MODES,
     CATEGORIES,
     CATEGORY_LABELS,
