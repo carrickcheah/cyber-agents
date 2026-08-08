@@ -1,0 +1,30 @@
+{
+  "name": "cyber-agents",
+  "version": "0.1.0",
+  "description": "AI-security auditor — score any AI endpoint against Responsible-AI metrics, plus a 44-control safety register (early/experimental)",
+  "license": "MIT",
+  "author": "Carrick Cheah",
+  "keywords": ["ai", "security", "agents", "guardrails", "llm", "responsible-ai", "safety"],
+  "repository": { "type": "git", "url": "https://github.com/carrickcheah/cyber-agents" },
+  "homepage": "https://github.com/carrickcheah/cyber-agents",
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./alignment": { "types": "./dist/alignment.d.ts", "import": "./dist/alignment.js" },
+    "./guardrails": { "types": "./dist/guardrails.d.ts", "import": "./dist/guardrails.js" },
+    "./fairness": { "types": "./dist/fairness.d.ts", "import": "./dist/fairness.js" },
+    "./review-routing": { "types": "./dist/review-routing.d.ts", "import": "./dist/review-routing.js" },
+    "./compliance": { "types": "./dist/compliance.d.ts", "import": "./dist/compliance.js" },
+    "./register": { "types": "./dist/register.d.ts", "import": "./dist/register.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

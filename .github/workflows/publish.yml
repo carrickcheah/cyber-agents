@@ -1,0 +1,69 @@
+name: Publish
+
+# Publishes cyber-agents to PyPI + npm when you cut a GitHub Release
+# (or run this workflow manually). No credentials live in the repo:
+#  - PyPI uses Trusted Publishing (OIDC) — no token at all.
+#  - npm uses the NPM_TOKEN repository secret + build provenance.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test both packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: TypeScript — build + test
+        run: bun install && bun run build && bun test
+        working-directory: typescript
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Python — test
+        run: PYTHONPATH=src python3 -m unittest discover -s tests -v
+        working-directory: python
+
+  pypi:
+    name: Publish to PyPI (trusted publishing)
+    needs: test
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # OIDC — lets PyPI trust this workflow, no token needed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build sdist + wheel
+        run: uv build
+        working-directory: python
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist
+
+  npm:
+    name: Publish to npm
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write        # build provenance
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Build
+        run: bun install && bun run build
+        working-directory: typescript
+      - name: Publish
+        run: npm publish --provenance --access public
+        working-directory: typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

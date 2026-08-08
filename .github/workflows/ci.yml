@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  typescript:
+    name: TypeScript — build + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install
+        run: bun install
+        working-directory: typescript
+      - name: Build (tsc — the typecheck)
+        run: bun run build
+        working-directory: typescript
+      - name: Test
+        run: bun test
+        working-directory: typescript
+
+  python:
+    name: Python — test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Test
+        run: PYTHONPATH=src python3 -m unittest discover -s tests -v
+        working-directory: python
