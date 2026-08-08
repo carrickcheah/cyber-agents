@@ -99,6 +99,10 @@ Early release. The five-domain API shape is stable; the guardrails checks and
 the register are real, the remaining domain checks are being designed. Not
 production-ready as an auditor — the register and the docs are production-derived.
 
+The path to production grade — measured multilingual detectors, canary-token
+leak detection, an in-repo eval corpus with CI gates, and register-mapped audit
+evidence — is laid out in [`ROADMAP.md`](ROADMAP.md).
+
 ## License
 
 MIT
