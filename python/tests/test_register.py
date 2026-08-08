@@ -1,10 +1,10 @@
-"""Invariants of the reference control catalog (`cyber_agents.register`)."""
+"""Invariants of the reference control catalog (`aisafety.register`)."""
 from __future__ import annotations
 
 import re
 import unittest
 
-from cyber_agents.register import (
+from aisafety.register import (
     CAPTURE_MODES,
     CATEGORIES,
     CATEGORY_LABELS,

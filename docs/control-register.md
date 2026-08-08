@@ -4,8 +4,8 @@ A **safety control register** is the spine of an auditable AI system: one typed
 list, in shipped source code, where every guardrail is a row an auditor can
 walk — what you claim, how it is proven, where it lives. This document is the
 pattern; [`control-catalog.md`](control-catalog.md) is the 44-control reference
-catalog that ships as data in `cyber-agents/register` (TS) and
-`cyber_agents.register` (Python).
+catalog that ships as data in `aisafety/register` (TS) and
+`aisafety.register` (Python).
 
 Everything here was extracted from a production multi-tenant AI contact centre
 — these are the rules that survived real audits and real incidents, not theory.

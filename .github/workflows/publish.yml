@@ -1,6 +1,6 @@
 name: Publish
 
-# Publishes cyber-agents to PyPI + npm when you cut a GitHub Release
+# Publishes aisafety to PyPI + npm when you cut a GitHub Release
 # (or run this workflow manually). No credentials live in the repo:
 #  - PyPI uses Trusted Publishing (OIDC) — no token at all.
 #  - npm uses the NPM_TOKEN repository secret + build provenance.
