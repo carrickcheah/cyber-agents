@@ -19,8 +19,8 @@
  * request from evidence — a hardcoded status is exactly the unverifiable claim
  * a register exists to replace.
  *
- * See docs/control-register.md for the full pattern and docs/control-catalog.md
- * for the reference catalog rendered as a document.
+ * See docs/documentations/control-register.md for the full pattern and
+ * docs/documentations/control-catalog.md for the reference catalog rendered as a document.
  */
 
 export const status = "experimental" as const;
@@ -81,6 +81,64 @@ export type ControlLayer = "trained" | "prompt" | "screening" | "authorization" 
  *   unproven  — neither was possible. Stated rather than left to look equal.
  */
 export type VerifiedBy = "mutation" | "prod-read" | "unproven";
+
+/**
+ * The OWASP Agentic Security Initiative threat list (ASI 2026 taxonomy),
+ * ASI01–ASI10. Named in ONE place so a control's `asiName` cannot drift from
+ * the threat it claims to address, and so a threat with no controls still has
+ * a name to be reported under.
+ */
+export const ASI_THREATS: Readonly<Record<string, string>> = {
+  ASI01: "Agent Goal Hijack",
+  ASI02: "Tool Misuse and Exploitation",
+  ASI03: "Identity and Privilege Abuse",
+  ASI04: "Agentic Supply Chain Vulnerabilities",
+  ASI05: "Unexpected Code Execution",
+  ASI06: "Memory and Context Poisoning",
+  ASI07: "Insecure Inter-Agent Communication",
+  ASI08: "Cascading Agent Failures",
+  ASI09: "Human-Agent Trust Exploitation",
+  ASI10: "Rogue Agents",
+};
+
+/**
+ * Why a threat has no controls — "absent is never zero", one level up.
+ *
+ * The control-level rule (`capture: "not-instrumented"` requires a `gap`) makes
+ * an unmeasured control say so. It cannot help at the THREAT level: a threat
+ * nothing maps to renders as a blank row, and a blank is unreadable — it could
+ * mean the threat was missed, or that the architecture cannot exhibit it. Those
+ * are opposite facts and a coverage score that conflates them is dishonest in
+ * the optimistic direction.
+ *
+ *   covered        — one or more controls map to it. DERIVED, never declared.
+ *   gap            — it applies to this system and no control covers it yet.
+ *   not-applicable — the architecture cannot exhibit it, with the reason why.
+ *   undeclared     — no controls and no declared posture. The failure state.
+ *
+ * `undeclared` is representable on purpose rather than prevented: a register
+ * that cannot express its own omission hides it. The tests assert the reference
+ * catalog carries none.
+ */
+export type ThreatStatus = "covered" | "gap" | "not-applicable" | "undeclared";
+
+/**
+ * A declared position on a threat that no control maps to. `covered` is absent
+ * from `status` deliberately — coverage is computed from the controls, never
+ * asserted, for the same reason a control carries no hardcoded live status.
+ */
+export interface ThreatPosture {
+  /** ASI id, e.g. "ASI07". Must be a key of ASI_THREATS. */
+  threat: string;
+  status: "gap" | "not-applicable";
+  /**
+   * Why. Required on both statuses: an unexplained "not applicable" is how a
+   * real obligation gets waved away, and an unexplained gap cannot be actioned.
+   * For `not-applicable`, state the architectural fact that makes it true and
+   * the change that would revoke it.
+   */
+  reason: string;
+}
 
 export interface SafetyControl {
   id: string;
@@ -178,7 +236,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "authorization",
     owasp: "LLM02",
     asi: "ASI02",
-    asiName: "Tool Misuse",
+    asiName: "Tool Misuse and Exploitation",
     asiWhy: "a tool it may never use",
     notes: "Enforced by a deny-by-default pre-tool-use hook over locked review actions. Mutation-verified two ways: gate forced to allow, and the matching pattern deleted — both turned the suite red.",
   },
@@ -193,7 +251,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "authorization",
     owasp: "LLM02",
     asi: "ASI05",
-    asiName: "Unexpected Code Execution / Unsafe Output",
+    asiName: "Unexpected Code Execution",
     asiWhy: "shell and file access is the code-execution path",
     notes: "Mutation-verified: non-MCP tools allowed, gate suite went red. Counter-intuitive and worth stating: the agent SDK's allowed-tools list is an AUTO-APPROVE list, not a restriction, so the built-ins stay reachable unless something denies them — the deny check is installed unconditionally for exactly that reason, and every prompt on this path carries untrusted customer text. Was emitted in production for every non-refund tool denial but MISSING from the register: evidence was written against a control id the page did not define, so those denials rendered nowhere. Found because the numbering gap was questioned.",
   },
@@ -208,7 +266,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM02",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "stops a silent failure propagating",
     notes: "Mutation-verified: outcome reporter made to never report an empty run, suite went red.",
   },
@@ -223,7 +281,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM02",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "provider error text does not leak downstream",
     notes: "Mutation-verified: recogniser stopped matching provider error text, test went red. Was a free id filled by a real but unregistered feature — found by continuing to check numbering gaps rather than trusting a string search. Deliberate asymmetry: if a tool has ALREADY executed, the turn is NOT retried, because re-running could place the same order or send the same message twice — a plain error is surfaced and the caller escalates instead. Declared gap: only counted from when recording began; earlier occurrences were never recorded.",
   },
@@ -238,7 +296,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM02",
     asi: "ASI09",
-    asiName: "Human Trust Exploitation",
+    asiName: "Human-Agent Trust Exploitation",
     asiWhy: "the bot claiming authority it does not have",
     notes: "Mutation-verified via a detector-parity test. Deliberately reworded from a prevention claim: the canary is explicitly log-only and never blocks — the promise still reaches the customer and is recorded afterwards; prevention is the refund tool-gate's job, and claiming prevention here is exactly the unverifiable claim the register exists to remove. Capture migrated from derived (regex re-scan of every sent reply on each page load, a large share of page time) to an event stamped when a reply is flagged. Declared gaps: it detects, it does not stop; live counting began at deploy (a partial first day) across every reply path; earlier hits survive only in frozen daily snapshots.",
   },
@@ -253,7 +311,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "authorization",
     owasp: "LLM02",
     asi: "ASI03",
-    asiName: "Privilege Abuse",
+    asiName: "Identity and Privilege Abuse",
     asiWhy: "no grant means no privilege",
     notes: "Mutation-verified: granting every tool turned the suite red. Fail direction is closed: a broken capabilities file yields zero tools. Declared gap: the check proves nothing is granted by accident, not that a granted list is sensible.",
   },
@@ -268,7 +326,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "authorization",
     owasp: "LLM06",
     asi: "ASI06",
-    asiName: "Memory & Context Poisoning",
+    asiName: "Memory and Context Poisoning",
     asiWhy: "nothing leaks between conversations",
     notes: "Prod-read: production's auth mode makes the per-session config directory unconditional. Declared gap: one exception exists on a developer's own laptop, never in production.",
   },
@@ -283,7 +341,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM02",
     asi: "ASI02",
-    asiName: "Tool Misuse",
+    asiName: "Tool Misuse and Exploitation",
     asiWhy: "prevents the same action running twice",
     notes: "Mutation-verified: marking all tools safe to re-run turned the latch suite red. Declared gap: when the latch stops a retry, the customer-visible record says 'AI error' without naming the retry-block as the reason.",
   },
@@ -298,7 +356,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "platform",
     owasp: "LLM09",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "a failed hand-off must not silently swallow the answer",
     notes: "Registered after a real incident: the agent wrote an answer while a deploy was replacing the messaging service, the single delivery call failed, and the reply was discarded with only a warn line — nothing retried it, nothing recorded it, and the page showed a healthy account while a customer sat looking at silence. Two mutations, both caught: retry rule forced to never retry, and backoff shortened to inside a restart window. Declared gap: covers the DELIVERY step only — if the AI service itself restarts mid-run, the answer dies with the process and that turn leaves no record at all.",
   },
@@ -313,7 +371,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM10",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "one sender exhausting the agent's capacity",
     notes: "Mutation-verified: rate check forced to allow, suite went red. Declared gap: on channels where the flood is blocked before the tenant is resolved, those blocks cannot be attributed and are not counted.",
   },
@@ -343,7 +401,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM09",
     asi: "ASI09",
-    asiName: "Human Trust Exploitation",
+    asiName: "Human-Agent Trust Exploitation",
     asiWhy: "answering from nothing is false confidence",
     notes: "Mutation-verified: guard made to always pass replies, suite went red. Was a real, shipped guardrail with no register entry — found by questioning a numbering gap rather than trusting a string search. Known evidence limit (not an implementation one): the guard rewrites the reply to the handover marker and downstream treats it exactly like a model-initiated handover — same flip, same note wording — so the note proves A handover happened but not that GROUNDING caused it, and the number of ungrounded answers prevented is not separately countable; the guard's own log lines are not queryable evidence. Applies only to agents granted the strict setting, not all.",
   },
@@ -358,7 +416,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM10",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "an oversized payload crowding the context window",
     notes: "Mutation-verified. The cap is compile-time with no env override, and deliberately sits above every channel's native message-length limit, so no channel-legal message is ever truncated — it only bites stitched or pasted payloads. Admin/console input is trusted and uncapped by design, which is why this is not a fleet-wide claim about all input. Declared gap: truncation is not recorded, so frequency is unknown.",
   },
@@ -373,7 +431,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM10",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "a runaway loop consuming budget and trust",
     notes: "Mutation-verified: verdict forced to ok, guard suite went red. Keys on consecutive bot replies with no inbound between — a human message always breaks the chain.",
   },
@@ -388,7 +446,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM10",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "one question looping without end",
     notes: "Prod-read: the env override is unset in production, so the code default applies. Taxonomy note: filed under guardrails rather than alignment on purpose — this is runaway-loop / unbounded-consumption resistance, the same family as the loop breaker; filling a numbering gap in another category would have been the wrong taxonomy. Declared gaps: the limit is server-tunable so the real number may differ, and hitting it is not recorded.",
   },
@@ -403,7 +461,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM10",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "one conversation burning budget without end",
     notes: "Mutation-verified. Registered late: a guardrail the operator had tuned personally but which was never on the page — they remembered the number and could not find it. The threshold's history is kept deliberately: at a lower value it once muted the bot mid-sale on a talkative but genuine customer, so it was raised — lowering it back is the known regression to avoid. The loop breaker is the real runaway detector; this is a cost/abuse backstop. Declared gaps: counted together with the loop breaker (both leave the same kind of note, so the page cannot tell them apart), the value is server-tunable, and zero turns it off.",
   },
@@ -418,7 +476,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM06",
     asi: "ASI09",
-    asiName: "Human Trust Exploitation",
+    asiName: "Human-Agent Trust Exploitation",
     asiWhy: "the bot answering the business's own staff",
     notes: "Mutation-verified: direction assertion forced false stored both forged and self-consistent forged echoes, tests went red. The echo sender must equal the inbox's STORED own number (with a display-number metadata fallback; an empty value never matches); a mismatch is dropped and stamps a direction-mismatch guardrail event.",
   },
@@ -433,7 +491,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM06",
     asi: "ASI09",
-    asiName: "Human Trust Exploitation",
+    asiName: "Human-Agent Trust Exploitation",
     asiWhy: "the bot answering the business's own staff",
     notes: "Replaces a blanket 'ignore every message on the alert line' rule that held only while the line had no customers — a real inbox once lost weeks of inbound messages at info log level, looking exactly like silence. Mutation-verified with a designed split: the mutation removed the guard, not the line, so customer-path tests still passed while every staff-protection test failed. Event kinds distinguish caught / could-not-decide / recognition-set-changed, plus a checked counter incremented only on successful reads. Declared gaps: recognition depends on staff numbers being configured; the drop is guaranteed while evidence writes are best-effort; and when the alert channel is off entirely the guard does not run — the checked counter then reads absent rather than zero, the honest signal.",
   },
@@ -448,7 +506,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM05",
     asi: "ASI05",
-    asiName: "Unexpected Code Execution / Unsafe Output",
+    asiName: "Unexpected Code Execution",
     asiWhy: "unvetted model output straight into a caller's ear",
     notes: "Voice controls were registered at build time, per the standing rule that a control which cannot be evidenced is not finished — the gateway declares its missing instrumentation rather than hiding behind a reassuring zero. Mutation-verified at the unit level. Declared gaps: a reply-grounding golden set exists but its runner is not yet wired, so 'test' evidence currently means the unit suite, not the golden set; event emission is fail-open — a database fault under-counts fires without touching the call.",
   },
@@ -463,7 +521,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM05",
     asi: "ASI05",
-    asiName: "Unexpected Code Execution / Unsafe Output",
+    asiName: "Unexpected Code Execution",
     asiWhy: "the log-only screen that notices what the guard cannot",
     notes: "Mutation-verified: residue check removed, unit test went red. Declared gaps: detector consolidation with the text-channel canary remains open — two canaries, two vocabularies, until one shared source exists; emission is fail-open and per-fire.",
   },
@@ -477,7 +535,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     capture: "event",
     layer: "authorization",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "unmetered calls burning tenant balance",
     notes: "Unproven: exercised live against a local stack (a short call moved the wallet balance; the refusal path was manually forced) but no automated test yet — declared rather than hidden. Refusals emit their own event kind, and the charge side is evidenced by wallet-ledger rows tagged with a voice source.",
   },
@@ -491,7 +549,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     capture: "event",
     layer: "screening",
     asi: "ASI06",
-    asiName: "Memory & Context Poisoning",
+    asiName: "Memory and Context Poisoning",
     asiWhy: "escalation the model asks for but must not control",
     notes: "No verification mode recorded yet. Declared gaps: the warm phone transfer does not exist until the telephony phase, and an unset handover-target setting skips the handler flip with only a log line — the event still fires, so the miss is at least counted.",
   },
@@ -562,7 +620,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM09",
     asi: "ASI09",
-    asiName: "Human Trust Exploitation",
+    asiName: "Human-Agent Trust Exploitation",
     asiWhy: "the model must not merely claim it escalated",
     notes: "Mutation-verified: handover marker made unrecognisable, guard suite went red. Incident drill-through links to an operator-safe conversation viewer that takes the tenant from the URL and filters on both ids; the tenant-facing route is deliberately not reused because it resolves the tenant from the viewer's session and would open the wrong tenant from a cross-tenant page.",
   },
@@ -577,7 +635,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM09",
     asi: "ASI09",
-    asiName: "Human Trust Exploitation",
+    asiName: "Human-Agent Trust Exploitation",
     asiWhy: "the bot talking over a human who already replied",
     gap: "The discarded reply is logged but not recorded as a safety event, so how often a human was protected from being talked over is unknown.",
     notes: "Unproven: the re-check is inline in the webhook with no exported function, so a unit test cannot reach it without refactoring. Declared gap: the discarded reply is logged but not recorded as a safety event, so how often a human was protected from being talked over is unknown.",
@@ -604,7 +662,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM09",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "a failed handover must not propagate silently",
     notes: "Mutation-verified: severity downgraded from critical, test went red. The private note is the durable record; a real-time operator ping is layered on top. Design rule: the record is written whether or not the alert was delivered, so a missing alert never means a missing incident — alert DELIVERY itself is log-only, not evidence.",
   },
@@ -618,7 +676,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     capture: "config",
     layer: "platform",
     asi: "ASI08",
-    asiName: "Cascading Failure / Resource Overload",
+    asiName: "Cascading Agent Failures",
     asiWhy: "an alert storm trains staff to ignore alerts",
     notes: "Mutation-verified: dedup forced to always allow, tests went red. Declared gap: the dedup lives in memory, so a restart can allow one repeat alert. Escalations bypass the dedup deliberately — they are never suppressed.",
   },
@@ -656,7 +714,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "platform",
     owasp: "LLM06",
     asi: "ASI06",
-    asiName: "Memory & Context Poisoning",
+    asiName: "Memory and Context Poisoning",
     asiWhy: "stale memory re-teaching old mistakes",
     gap: "The retention value lives in another service's environment, which the attesting service cannot read to prove it.",
     notes: "Prod-read: the retention window is set in the production environment. Declared gap: the retention value lives in the other service's environment, which the attesting service cannot read to prove it.",
@@ -709,7 +767,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "authorization",
     owasp: "LLM06",
     asi: "ASI03",
-    asiName: "Privilege Abuse",
+    asiName: "Identity and Privilege Abuse",
     asiWhy: "a stolen old session must stop working",
     notes: "Prod-read: login rotates the stored access token, which the JWT session id is checked against. Declared gaps: applies to tenant staff logins; session takeovers are not recorded, so the page cannot show how often it happened.",
   },
@@ -724,7 +782,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "screening",
     owasp: "LLM06",
     asi: "ASI06",
-    asiName: "Memory & Context Poisoning",
+    asiName: "Memory and Context Poisoning",
     asiWhy: "internal notes must not become AI context or customer text",
     notes: "Unproven: no test covers private notes being withheld from the agent. Declared gap: covers the customer-service path; a note remains visible to any staff member with access to the conversation.",
   },
@@ -751,7 +809,7 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "authorization",
     owasp: "LLM06",
     asi: "ASI03",
-    asiName: "Privilege Abuse",
+    asiName: "Identity and Privilege Abuse",
     asiWhy: "ordinary staff must not reach billing or settings",
     notes: "Mutation-verified: role gate forced to pass everyone, suite went red. Declared gap: refusals are not recorded, so attempted access does not appear on the page.",
   },
@@ -778,6 +836,37 @@ export const REFERENCE_CONTROLS: readonly SafetyControl[] = [
     layer: "platform",
     owasp: "LLM06",
     notes: "The last hop is the one that fails: events can be emitted and routed correctly, then delivered to an operator channel that is not configured — and that failure affects every producer of critical severity at once. Route platform-internal alerts to an operator-owned channel, never to a tenant account that happens to have a working channel: that would leak operational detail and page people who cannot act. A gap may be declared, but never left undeclared.",
+  },
+];
+
+/**
+ * The originating system's declared position on every ASI threat its controls
+ * do not reach. Three of ten, and they are not the same kind of absence — which
+ * is the entire point of separating `gap` from `not-applicable`.
+ *
+ * A catalog extracted from one production system SHOULD have holes; a catalog
+ * that scores 10/10 was probably written against the threat list rather than
+ * against a system. The holes are the finding, so they are declared here rather
+ * than left to read as an oversight.
+ */
+export const REFERENCE_THREAT_POSTURE: readonly ThreatPosture[] = [
+  {
+    threat: "ASI04",
+    status: "gap",
+    reason:
+      "Applies and is not covered. The system depends on a model vendor, third-party libraries and MCP tool servers, and no control in this catalog addresses the provenance or integrity of any of them. A real hole, declared rather than left blank.",
+  },
+  {
+    threat: "ASI07",
+    status: "not-applicable",
+    reason:
+      "Single-agent architecture: one agent serves a conversation and never messages another agent, so there is no inter-agent channel to secure. Revoke this the moment a second agent is introduced — the posture describes the architecture, not the intent.",
+  },
+  {
+    threat: "ASI10",
+    status: "not-applicable",
+    reason:
+      "Single-agent architecture: there is no fleet for a member to go rogue within and no agent registry to be impersonated in. Revoke this the moment agents are spawned dynamically or per-tenant.",
   },
 ];
 
@@ -833,4 +922,61 @@ export function coverage(controls: readonly SafetyControl[] = REFERENCE_CONTROLS
     if (c.failing) failing.push(c.id);
   }
   return { total: controls.length, byEvidence, byCapture, byLayer, notInstrumented, failing };
+}
+
+/** One ASI threat, and what this register has to say about it. */
+export interface ThreatCoverageRow {
+  threat: string;
+  name: string;
+  status: ThreatStatus;
+  /** Ids of the controls mapped to this threat. Empty unless status is "covered". */
+  controls: string[];
+  /** The declared reason. Present for "gap" and "not-applicable", absent otherwise. */
+  reason?: string;
+}
+
+/**
+ * Threat-side coverage: the answer to "how many of the ten do you cover?", with
+ * the two kinds of absence held apart.
+ */
+export interface ThreatCoverage {
+  /** Always the size of ASI_THREATS — the denominator is the whole list, not the part you mapped. */
+  total: number;
+  covered: string[];
+  gaps: string[];
+  notApplicable: string[];
+  /** Threats with neither controls nor a declared posture. MUST be empty. */
+  undeclared: string[];
+  rows: ThreatCoverageRow[];
+}
+
+/**
+ * Aggregate controls and declared postures into a per-threat view.
+ *
+ * A posture is ignored for any threat that controls already reach: coverage is
+ * derived, so a stale "not-applicable" left behind after a control was added
+ * cannot suppress it. The contradiction is not silently resolved — the tests
+ * assert no posture is declared for a covered threat.
+ */
+export function threatCoverage(
+  controls: readonly SafetyControl[] = REFERENCE_CONTROLS,
+  posture: readonly ThreatPosture[] = REFERENCE_THREAT_POSTURE,
+): ThreatCoverage {
+  const declared = new Map(posture.map((p) => [p.threat, p]));
+  const rows: ThreatCoverageRow[] = Object.entries(ASI_THREATS).map(([threat, name]) => {
+    const mapped = controls.filter((c) => c.asi === threat).map((c) => c.id);
+    if (mapped.length > 0) return { threat, name, status: "covered", controls: mapped };
+    const p = declared.get(threat);
+    if (!p) return { threat, name, status: "undeclared", controls: [] };
+    return { threat, name, status: p.status, controls: [], reason: p.reason };
+  });
+  const ids = (status: ThreatStatus) => rows.filter((r) => r.status === status).map((r) => r.threat);
+  return {
+    total: rows.length,
+    covered: ids("covered"),
+    gaps: ids("gap"),
+    notApplicable: ids("not-applicable"),
+    undeclared: ids("undeclared"),
+    rows,
+  };
 }

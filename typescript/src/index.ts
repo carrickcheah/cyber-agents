@@ -24,6 +24,10 @@ export type {
   ControlLayer,
   VerifiedBy,
   RegisterCoverage,
+  ThreatStatus,
+  ThreatPosture,
+  ThreatCoverageRow,
+  ThreatCoverage,
 } from "./register.js";
 
 import * as alignment from "./alignment.js";
