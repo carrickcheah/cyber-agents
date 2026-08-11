@@ -103,6 +103,46 @@ zero. The same principle at every layer:
 - "latest" means latest **attempt**, not latest success — a broken run
   displaces a previous pass in the headline.
 
+## The same rule one level up: threats, not controls
+
+`not-instrumented` fixes an unmeasured **control**. It cannot reach the failure
+above it. Map your controls to a published threat list — OWASP ASI here — and
+the threats *nothing maps to* render as blank rows. A blank is unreadable: it
+could mean the threat was missed, or that the architecture cannot exhibit it.
+Those are opposite facts, and a coverage headline that adds them together errs
+optimistically every time.
+
+So a threat with no controls must declare which it is:
+
+| Status | Meaning | Declared or derived |
+|---|---|---|
+| `covered` | one or more controls map to it | **derived** — never asserted |
+| `gap` | it applies here, nothing covers it yet | declared, reason required |
+| `not-applicable` | the architecture cannot exhibit it | declared, reason required |
+| `undeclared` | no controls, no posture | the failure state |
+
+Four rules make it hold:
+
+1. **`covered` is not declarable.** Coverage is computed from the controls, for
+   the same reason a control carries no hardcoded live status. A stale
+   `not-applicable` left behind after a control is added cannot suppress it —
+   derived coverage wins, and a posture on an already-covered threat is a
+   contradiction the tests reject.
+2. **A reason is required on both declared statuses.** An unexplained "not
+   applicable" is how a real obligation gets waved away; an unexplained gap
+   cannot be actioned.
+3. **A `not-applicable` reason names the architectural fact and the change that
+   revokes it** — "single-agent architecture; revoke the moment a second agent
+   is introduced". The posture describes the system, not the intent, so it
+   expires on its own terms rather than persisting as a habit.
+4. **`undeclared` is representable, not prevented.** A register that cannot
+   express its own omission hides it. Make the state exist, render it loudly,
+   and let a test assert your catalog carries none.
+
+The denominator is the **whole published list**, never the part you mapped. A
+"7/7" computed over the threats you happened to cover is the same lie as a
+`1.000` gate score over zero items.
+
 ## The `failing` flag
 
 A prose "CURRENTLY FAILING" in a notes field is invisible to a renderer: in the

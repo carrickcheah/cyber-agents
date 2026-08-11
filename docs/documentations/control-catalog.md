@@ -18,16 +18,49 @@ Security Initiative threat id; **OWASP**: LLM Top 10 id.
 
 ## Threat coverage (OWASP ASI)
 
-| ASI threat | Controls mapped |
-|---|---|
-| ASI01 — Agent Goal Hijack | 1 |
-| ASI02 — Tool Misuse | 2 |
-| ASI03 — Privilege Abuse | 3 |
-| ASI05 — Unexpected Code Execution / Unsafe Output | 3 |
-| ASI06 — Memory & Context Poisoning | 4 |
-| ASI08 — Cascading Failure / Resource Overload | 11 |
-| ASI09 — Human Trust Exploitation | 6 |
-| *(no agent-specific threat — fairness/compliance hygiene)* | 14 |
+**Seven of ten covered.** The other three are *declared, not blank* —
+`threatCoverage()` / `threat_coverage()` returns a row for every threat in the
+list, and a threat with neither controls nor a declared posture reports as
+`undeclared`, which the tests forbid.
+
+| ASI threat | Status | Controls |
+|---|---|---|
+| ASI01 — Agent Goal Hijack | covered | 1 |
+| ASI02 — Tool Misuse and Exploitation | covered | 2 |
+| ASI03 — Identity and Privilege Abuse | covered | 3 |
+| ASI04 — Agentic Supply Chain Vulnerabilities | **gap** | 0 |
+| ASI05 — Unexpected Code Execution | covered | 3 |
+| ASI06 — Memory and Context Poisoning | covered | 4 |
+| ASI07 — Insecure Inter-Agent Communication | **not applicable** | 0 |
+| ASI08 — Cascading Agent Failures | covered | 11 |
+| ASI09 — Human-Agent Trust Exploitation | covered | 6 |
+| ASI10 — Rogue Agents | **not applicable** | 0 |
+
+30 of the 44 controls carry an ASI mapping; the remaining 14 are fairness and
+compliance hygiene with no agent-specific threat.
+
+### The three absences are not the same kind
+
+**ASI04 — a gap.** It applies. The system depends on a model vendor, third-party
+libraries and MCP tool servers, and no control here addresses the provenance or
+integrity of any of them. A real hole, declared rather than left to read as an
+oversight.
+
+**ASI07 and ASI10 — not applicable.** Single-agent architecture: one agent serves
+a conversation and never messages another, so there is no inter-agent channel to
+secure and no fleet for a member to go rogue within. Both postures describe the
+*architecture*, not the intent — each carries the change that revokes it, and a
+second agent revokes both.
+
+Separating the two matters because a blank cell is unreadable: it could mean the
+threat was missed or that it cannot occur, and those are opposite facts. A score
+that conflates them is dishonest in the optimistic direction. This is
+[absent is never zero](control-register.md#absent-is-never-zero) applied one
+level up, to threats rather than controls.
+
+A catalog extracted from one production system *should* have holes. A catalog
+scoring 10/10 was likely written against the threat list rather than against a
+running system — the holes are the finding.
 
 ## Alignment (9)
 
