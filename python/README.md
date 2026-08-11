@@ -6,7 +6,7 @@ An AI-security **auditor**: point it at an AI system's endpoint and score how
 well it aligns with Responsible-AI metrics, across five domains.
 
 ```bash
-pip install llmsafety
+uv add llmsafety
 ```
 
 ```python
@@ -18,7 +18,12 @@ print(result.passed, result.score, result.findings)
 ```
 
 `check()` returns a `CheckResult(domain, passed, score, findings)`. One name
-everywhere: `pip install llmsafety` → `import llmsafety`.
+everywhere: `uv add llmsafety` → `import llmsafety`.
+
+Use `uv add`, not `uv pip install` — `uv add` declares the dependency in
+`pyproject.toml` and pins it in `uv.lock`, so `uv sync --locked` reproduces the
+exact environment. `uv pip install` installs without recording anything, which
+leaves the next machine no way to know the package was needed.
 
 The **control register** ships a typed schema plus a 44-control reference
 catalog extracted from a production AI contact centre:

@@ -18,6 +18,22 @@ lock = alignment.RefundBlocked()                                   # catalog def
 lock = alignment.ToolBlocked(denied=["wire_transfer"], control="AL-01")   # a bank
 ```
 
+## Install
+
+```bash
+uv add llmsafety
+```
+
+Always `uv add`, never `uv pip install`. `uv add` records the dependency in
+`pyproject.toml` and pins it in `uv.lock`, so `uv sync --locked` reproduces the
+environment exactly and fails loudly if the lockfile has drifted.
+`uv pip install` installs the package and writes nothing down — the next
+machine has no way to know it was needed. That is this project's own principle
+one layer out: an undeclared dependency is an unmeasured control.
+
+For running the audit against a repository you do not own, `uvx llmsafety audit`
+runs it without touching that project's dependencies at all.
+
 ## Three kinds of class
 
 Not every control lives in the request path, so the classes come in three
@@ -32,6 +48,39 @@ kinds — and the three kinds are the three evidence classes, as code:
 Guards and detectors emit an evidence event on every fire (see the evidence
 design below). Attest classes take a `check=` callable and are executed by the
 audit, never in the request path.
+
+## Four verbs
+
+One verb per kind, so a reader never has to remember which class behaves how:
+
+| Kind | Verb | Behaviour |
+|---|---|---|
+| guard | `.enforce(x)` | raises on violation — the action dies |
+| detector | `.detect(x)` | returns findings — the caller decides |
+| attest | `.verify()` | returns pass/fail + reason, at audit time |
+| stateful guard | `.record(key)` | remembers what already happened |
+
+**Guards raise rather than return** because a return value can be ignored, and
+an ignored guard is a control that does nothing. Raising fails closed, which is
+the deliberate failure direction a guard should have. Detectors are the
+opposite on purpose: AL-05 catches the bot *promising* a refund, and the reply
+may still need to send with a human alerted — so it reports and never raises.
+
+`.record()` exists only on the stateful guards (AL-08, GD-01, GD-05, GD-06,
+GD-07, RR-05), which must remember across calls. That memory is why controls
+are classes rather than plain functions: a function forgets everything between
+invocations. The class also carries its own control id, so `evidence.fire()`
+can never be written against an id the register does not define — the AL-02
+failure that the originating system hit in production.
+
+Variable names are the user's own choice; only the class name and the verb are
+API:
+
+```python
+lock   = alignment.RefundBlocked()   # same thing
+guard  = alignment.RefundBlocked()   # same thing
+refund = alignment.RefundBlocked()   # same thing
+```
 
 ## Alignment (9)
 
@@ -109,6 +158,89 @@ CP-04 stays absent, as in the catalog.
 | CP-10 | `compliance.JobsRun()` | detector | a job that stops firing shows up |
 | CP-11 | `compliance.CriticalPaged()` | attest | critical events reach a real person |
 
+## Worked example — AL-01, end to end
+
+**The claim:** *the agent can never process a refund by itself.*
+
+Find the one place where the agent runs a tool. Every framework has one.
+
+Before:
+
+```python
+def call_tool(name, args):
+    return TOOLS[name](**args)
+```
+
+After:
+
+```python
+from llmsafety import alignment
+
+# llmsafety: AL-01
+refund = alignment.RefundBlocked()
+
+def call_tool(name, args):
+    try:
+        refund.enforce(name)
+    except alignment.ActionLocked:
+        return escalate_to_human(name, args)      # the caller's decision
+    return TOOLS[name](**args)
+```
+
+One import, one setup line, one call. Inside `enforce()`, two things happen —
+the evidence line is appended, then it raises, so the tool never runs:
+
+```python
+def enforce(self, tool_name):                     # inside llmsafety
+    if tool_name in self.denied or self.family.search(tool_name):
+        evidence.fire("AL-01", tool=tool_name, action="denied")
+        raise ActionLocked(f"AL-01: {tool_name} is locked pending human review")
+    return True
+```
+
+llmsafety stops the action; the caller decides what the customer sees.
+
+**Where the dispatch point lives.** The pattern is the same everywhere — find
+where a tool name becomes an executed function, and guard it *before* the call.
+A guard that runs afterwards is a log entry, not a control.
+
+| Stack | The place |
+|---|---|
+| Claude Agent SDK | the `PreToolUse` hook |
+| OpenAI function calling | the tool-call dispatch loop |
+| LangChain / LangGraph | the tool-executor node, before `.invoke()` |
+| MCP server | the top of the `call_tool` handler |
+| Plain HTTP API | wherever an action string maps to a function |
+
+**What it produces.** One evidence line per fire, written without any logging
+code in the user's application:
+
+```json
+{"t":"2026-08-11T18:44:02+08:00","control":"AL-01","event":"denied","tool":"refund_order"}
+```
+
+and one audit row:
+
+```
+AL-01  bot can never refund by itself   ENFORCED   my_agent.py:6   fired 3×/30d  ✅
+```
+
+which is all three properties at once — *enforced* (the marker was found at
+that line), *observed* (it fired three times in thirty days), *auditable* (the
+row is dated, repeatable, and backed by the evidence file).
+
+**Another domain.** `RefundBlocked()` is `ToolBlocked()` with the contact-centre
+parameters already filled in. Same machine, different words:
+
+```python
+alignment.ToolBlocked(control="AL-01", denied=["wire_transfer", "close_account"])  # a bank
+alignment.ToolBlocked(control="AL-01", denied=["prescribe", "discharge"])          # a hospital
+alignment.ToolBlocked(control="AL-01", family=r"force.?push|drop.?table")          # a code agent
+```
+
+This is the generalisation the whole catalog rests on: the **pattern** is
+universal, the **parameters** are the deployment's own.
+
 ## How an attest class works
 
 Nothing in the request path — the user hands it a way to check, and
@@ -141,11 +273,25 @@ def on_tool_call(tool, args):        # the user's own hook — we never own the 
   `llmsafety-evidence.jsonl`. No OpenTelemetry, no Langfuse, no server
   required; external sinks are an optional one-line adapter, never a
   dependency. `evidence.fired("AL-01", days=30)` answers "did it fire?".
-- **Auditability** — `llmsafety audit` (read-only, run by the user, on their
-  machine) connects register + `# llmsafety: <ID>` markers + evidence log +
-  proof tests into a dated report: terminal table for the developer,
+- **Auditability** — `uv run llmsafety audit` (read-only, run by the user, on
+  their machine) connects register + `# llmsafety: <ID>` markers + evidence log
+  + proof tests into a dated report: terminal table for the developer,
   `--json` evidence artifact for the archive, `--html` one-file safety page
-  for the auditor. Exit non-zero on a broken claim gates CI.
+  for the auditor. Exit non-zero on a broken claim gates CI:
+
+```yaml
+- uses: astral-sh/setup-uv@v5
+- run: uv sync --locked
+- run: uv run llmsafety audit        # a broken claim turns the build red
+```
+
+  Shipping the CLI requires an entry point in `pyproject.toml`, which `0.1.0`
+  does not yet declare:
+
+```toml
+[project.scripts]
+llmsafety = "llmsafety.cli:main"
+```
 
 The helpers are optional. A user who keeps their own enforcement adds the
 marker and one `evidence.fire("AL-01")` line, and all three properties still

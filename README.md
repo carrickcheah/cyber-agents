@@ -29,12 +29,19 @@ centre), so the controls are the ones that actually shipped — not theory.
 
 | Language   | Install                                 | Import                                   |
 | ---------- | --------------------------------------- | ---------------------------------------- |
-| Python     | `pip install llmsafety`                 | `from llmsafety import guardrails`       |
+| Python     | `uv add llmsafety`                      | `from llmsafety import guardrails`       |
 | TypeScript | `npm i llmsafety` (`bun add llmsafety`) | `import { guardrails } from "llmsafety"` |
 
 
-> **One name everywhere:** `pip install llmsafety` → `import llmsafety`, and the
+> **One name everywhere:** `uv add llmsafety` → `import llmsafety`, and the
 > npm package is `llmsafety` too.
+
+> **Why `uv add`, not `uv pip install`.** `uv add` records the dependency in
+> `pyproject.toml` and pins it in `uv.lock`; `uv pip install` installs it and
+> writes nothing down, so the next machine has no way to know it was ever
+> needed. That is this project's own principle applied one layer out — an
+> undeclared dependency is an unmeasured control. Reproduce with
+> `uv sync --locked`, which refuses to run if the lockfile has drifted.
 
 
 

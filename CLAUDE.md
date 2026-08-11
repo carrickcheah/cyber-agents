@@ -31,7 +31,7 @@ runs exactly the build + test commands above.
 ### Two packages, one API
 
 `python/` and `typescript/` are **parallel implementations of the same library**, published
-under the same name to both registries (`pip install llmsafety`, `npm i llmsafety`). They are
+under the same name to both registries (`uv add llmsafety`, `npm i llmsafety`). They are
 not a core plus a binding — each is complete and standalone.
 
 **Any change to one must be mirrored in the other, including its tests.** The two test suites
